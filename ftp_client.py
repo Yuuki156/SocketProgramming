@@ -1,5 +1,6 @@
 import socket
 import ssl
+import os
 
 class ClientSocket:
     def __init__(self, host, port=21):
@@ -128,6 +129,55 @@ class ClientSocket:
         response = self.recv_response()
         print(response)
 
+    def change_directory_server(self, directory):
+        print(f"Change directory on server '{directory}'")
+        self.send_command(f"CWD {directory}")
+        response = self.recv_response()
+        print(response)
+
+    def change_directory_local(self, directory):
+        try:
+            os.chdir(directory)
+            print(f"Changed local directory to: {os.getcwd()}")
+        except FileNotFoundError:
+            print(f"Local directory '{directory}' is not available")
+        except Exception as e:
+            print(f"Error when changing local directory: {e}")
+
+    def print_current_server_directory(self):
+        self.send_command("PWD")
+        response = self.recv_response()
+        print(response)
+
+    def make_directory(self, directory_name):
+        print(f"Creating directory {directory_name}")
+        self.send_command(f"MKD {directory_name}")
+        response = self.recv_response()
+        print(response)
+
+    def remove_directory(self, directory_name):
+        print(f"Removing directory {directory_name}")
+        self.send_command(f"RMD {directory_name}")
+        response = self.recv_response()
+        print(response)
+
+    def delete_file(self, file_name):
+        print(f"Deleting file {file_name}")
+        self.send_command(f"DELE {file_name}")
+        response = self.recv_response()
+        print(response)
+
+    def rename_file(self, original_name, new_name):
+        print(f"Change file name from {original_name} to {new_name}")
+        self.send_command(f"RNFR {original_name}")
+        response = self.recv_response()
+        if response.startswith("350"):
+            self.send_command(f"RNTO {new_name}")
+            response = self.recv_response()
+            print(response)
+        else:
+            print("Error: Server is nor ready for changing name")
+
     def close(self):
         if self.control_socket:
             self.send_command("QUIT")
@@ -141,5 +191,13 @@ if __name__ == "__main__":
     if client.connect():
         if client.login("YuukiT", "151106"):
             client.is_passive = True
+            client.list_files()
+            client.print_current_server_directory()
+            client.make_directory("test_folder")
+            client.list_files()
+            client.change_directory_server("test_folder")
+            client.print_current_server_directory()
+            client.change_directory_server("..")
+            client.remove_directory("test_folder")
             client.list_files()
         client.close()
