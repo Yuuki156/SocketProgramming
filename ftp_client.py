@@ -91,20 +91,25 @@ class ClientSocket:
         print(f"Client is listening for data connection at {ip}:10806")
         return data_socket
 
-    def list_files(self):
+    def get_data_socket(self):
         temp_socket = None
         if self.is_passive:
             temp_socket = self.passive_mode()
         else:
             temp_socket = self.active_mode()
         self.send_command("LIST")
-        data_socket = None
         if self.is_passive:
-            data_socket = temp_socket
+            return temp_socket
         else:
             print("Waiting for server to connect")
             data_socket, adr = temp_socket.accept()
             print("Connection completed")
+            temp_socket.close()
+            return data_socket
+
+    def list_files(self):
+
+        data_socket = self.get_data_socket()
         response = self.recv_response()
         print(response)
         if not response.startswith("150"):
@@ -121,8 +126,6 @@ class ClientSocket:
         print(folder_list)
         print("----------------------")
         data_socket.close()
-        if not self.is_passive:
-            temp_socket.close()
         response = self.recv_response()
         print(response)
 
