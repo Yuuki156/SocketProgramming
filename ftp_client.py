@@ -9,6 +9,7 @@ class ClientSocket:
         self.host = host
         self.port = port
         self.context = None
+        self.transfer_mode = 'B'
 
     def recv_response(self):
         return self.control_socket.recv(4096).decode()
@@ -21,7 +22,7 @@ class ClientSocket:
     def connect(self):
         try:
             self.control_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.control_socket.settimeout(15)
+            self.control_socket.settimeout(10)
             self.control_socket.connect((self.host, self.port))
             response = self.recv_response()
             print(response)
@@ -50,6 +51,7 @@ class ClientSocket:
                 self.send_command("PROT P")
                 response = self.recv_response()
                 print(response)
+                self.set_transfer_mode('B')
                 return True
             return False
         except Exception as e:
@@ -253,6 +255,28 @@ class ClientSocket:
             if listen_socket:
                 listen_socket.close()
 
+    def set_transfer_mode(self, mode_sign):
+        mode_sign = mode_sign.upper()
+        if mode_sign not in ['A', 'B']:
+            print("Invalid mode. Please choose A(ASCII) or B(Binary)")
+            return
+        mode_name = str()
+        if mode_sign == 'A':
+            mode_name = "ASCII"
+        else:
+            mode_name = "Binary"
+        self.send_command(f"TYPE {mode_name}")
+        response = self.recv_response()
+        print(response)
+        if response.startswith("200"):
+            self.transfer_mode = mode_sign
+
+    def show_status(self):
+        print("\n--- Current Status ---")
+        self.send_command("STAT")
+        response = self.recv_response()
+        print(response)
+
     def close(self):
         if self.control_socket:
             self.send_command("QUIT")
@@ -265,9 +289,8 @@ if __name__ == "__main__":
     client = ClientSocket("127.0.0.1", 21)
     if client.connect():
         if client.login("YuukiT", "151106"):
-            client.list_files()
-            client.put_file("testFile.txt")
+            client.show_status()
             client.list_files()
             client.down_file("hi.txt")
-            client.list_files()
+            client.show_status()
         client.close()
