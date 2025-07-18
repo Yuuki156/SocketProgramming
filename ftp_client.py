@@ -9,7 +9,7 @@ class ClientSocket:
         self.host = host
         self.port = port
         self.context = None
-        self.transfer_mode = 'B'
+        self.transfer_mode = 'I'
 
     def recv_response(self):
         return self.control_socket.recv(4096).decode()
@@ -51,7 +51,7 @@ class ClientSocket:
                 self.send_command("PROT P")
                 response = self.recv_response()
                 print(response)
-                self.set_transfer_mode('B')
+                self.set_transfer_mode('I')
                 return True
             return False
         except Exception as e:
@@ -257,15 +257,16 @@ class ClientSocket:
 
     def set_transfer_mode(self, mode_sign):
         mode_sign = mode_sign.upper()
-        if mode_sign not in ['A', 'B']:
-            print("Invalid mode. Please choose A(ASCII) or B(Binary)")
+        if mode_sign not in ['A', 'I']:
+            print("Invalid mode. Please choose A(ASCII) or I(Binary)")
             return
         mode_name = str()
         if mode_sign == 'A':
             mode_name = "ASCII"
         else:
             mode_name = "Binary"
-        self.send_command(f"TYPE {mode_name}")
+        print(f"Set transfer mode to {mode_name}")
+        self.send_command(f"TYPE {mode_sign}")
         response = self.recv_response()
         print(response)
         if response.startswith("200"):
