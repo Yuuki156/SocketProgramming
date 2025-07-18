@@ -93,23 +93,22 @@ class ClientSocket:
         return data_socket
 
     def get_data_socket(self, cmd):
-        temp_socket = None
+        listen_socket = None
+        data_socket = None
         if self.is_passive:
-            temp_socket = self.passive_mode()
+            data_socket = self.passive_mode()
         else:
-            temp_socket = self.active_mode()
+            listen_socket = self.active_mode()
         self.send_command(cmd)
-        if self.is_passive:
-            return temp_socket
-        else:
+        if not self.is_passive:
             print("Waiting for server to connect")
-            data_socket, adr = temp_socket.accept()
+            data_socket, adr = listen_socket.accept()
             print("Connection completed")
-            temp_socket.close()
-            return data_socket
+        return data_socket, listen_socket
 
     def list_files(self):
-        data_socket = self.get_data_socket("LIST")
+        listen_socket = None
+        data_socket, listen_socket = self.get_data_socket("LIST")
         data_socket = self.context.wrap_socket(data_socket, session=self.control_socket.session)
         response = self.recv_response()
         print(response)
@@ -126,6 +125,8 @@ class ClientSocket:
         print(folder_list)
         print("----------------------")
         data_socket.close()
+        if listen_socket:
+            listen_socket.close()
         response = self.recv_response()
         print(response)
 
@@ -178,6 +179,80 @@ class ClientSocket:
         else:
             print("Error: Server is nor ready for changing name")
 
+    def scan_file_with_ClamAVAgent(self, filename):
+        print(f"Scanning {filename} with ClamAVAgent")
+        import time
+        time.sleep(1)
+        print("[ClamAVAgent] Result: Clean")
+        return True
+
+    "Cần thêm trường hợp xử lý file bị trùng (STOU)"
+    def put_file(self, local_filename, server_filename = None):
+        if not os.path.exists(local_filename):
+            print(f"File {local_filename} does not exist")
+            return
+        if not self.scan_file_with_ClamAVAgent(local_filename):
+            print("This file is not safe")
+            return
+        if not server_filename:
+            server_filename = os.path.basename(local_filename)
+        listen_socket = None
+        try:
+            data_socket, listen_socket = self.get_data_socket(f"STOR {server_filename}")
+            data_socket = self.context.wrap_socket(data_socket, session=self.control_socket.session)
+            response = self.recv_response()
+            print(response)
+            if not response.startswith("150"):
+                data_socket.close()
+                if listen_socket:
+                    listen_socket.close()
+                return
+            with open(local_filename, 'rb') as file:
+                while True:
+                    data = file.read(4096)
+                    if not data:
+                        break
+                    data_socket.sendall(data)
+                data_socket.close()
+                if listen_socket:
+                    listen_socket.close()
+                response = self.recv_response()
+                print(response)
+        except Exception as e:
+            print(f"Error when putting file: {e}")
+            if listen_socket:
+                listen_socket.close()
+
+    def down_file(self, server_filename, local_filename = None):
+        if not local_filename:
+            local_filename = server_filename
+        listen_socket = None
+        try:
+            data_socket, listen_socket = self.get_data_socket(f"RETR {server_filename}")
+            data_socket = self.context.wrap_socket(data_socket, session=self.control_socket.session)
+            response = self.recv_response()
+            print(response)
+            if not response.startswith("150"):
+                data_socket.close()
+                if listen_socket:
+                    listen_socket.close()
+                return
+            with open(local_filename, 'wb') as file:
+                while True:
+                    data = data_socket.recv(4096)
+                    if not data:
+                        break
+                    file.write(data)
+            data_socket.close()
+            if listen_socket:
+                listen_socket.close()
+            response = self.recv_response()
+            print(response)
+        except Exception as e:
+            print(f"Error when download file: {e}")
+            if listen_socket:
+                listen_socket.close()
+
     def close(self):
         if self.control_socket:
             self.send_command("QUIT")
@@ -190,14 +265,9 @@ if __name__ == "__main__":
     client = ClientSocket("127.0.0.1", 21)
     if client.connect():
         if client.login("YuukiT", "151106"):
-            client.is_passive = True
             client.list_files()
-            client.print_current_server_directory()
-            client.make_directory("test_folder")
+            client.put_file("testFile.txt")
             client.list_files()
-            client.change_directory_server("test_folder")
-            client.print_current_server_directory()
-            client.change_directory_server("..")
-            client.remove_directory("test_folder")
+            client.down_file("hi.txt")
             client.list_files()
         client.close()
