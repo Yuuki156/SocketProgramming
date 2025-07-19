@@ -1,6 +1,9 @@
 import socket
 import ssl
 import os
+import subprocess as sp
+import sys
+import time
 
 class ClientSocket:
     def __init__(self, host, port=21):
@@ -183,10 +186,37 @@ class ClientSocket:
 
     def scan_file_with_ClamAVAgent(self, filename):
         print(f"Scanning {filename} with ClamAVAgent")
-        import time
-        time.sleep(1)
-        print("[ClamAVAgent] Result: Clean")
-        return True
+        clamav_host = "127.0.0.1"
+        clamav_port = 15116
+        agent_process = None
+        try:
+            cmd = [sys.executable, "clamav_agent.py"]
+            agent_process = sp.Popen(cmd, text=True)
+            time.sleep(3)
+            agent_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            filesize = os.path.getsize(filename)
+            filesize_mb = os.path.getsize(filename) / (1024 * 1024)
+            agent_socket.settimeout(45 + filesize_mb * 4)
+            agent_socket.connect((clamav_host, clamav_port))
+            agent_socket.send(f"{filename}<SEPARATOR>{filesize}".encode())
+            with open(filename, "rb") as file:
+                while True:
+                    data = file.read(4096)
+                    if not data:
+                        break
+                    agent_socket.sendall(data)
+            result = agent_socket.recv(4096).decode()
+            agent_socket.close()
+            if result == "CLEAN":
+                return True
+            else:
+                return False
+        except Exception as e:
+            print(f"Unexpected error with agent: {e}")
+            return False
+        finally:
+            if agent_process:
+                agent_process.terminate()
 
     "Cần thêm trường hợp xử lý file bị trùng (STOU)"
     def put_file(self, local_filename, server_filename = None):
@@ -290,8 +320,7 @@ if __name__ == "__main__":
     client = ClientSocket("127.0.0.1", 21)
     if client.connect():
         if client.login("YuukiT", "151106"):
-            client.show_status()
             client.list_files()
-            client.down_file("hi.txt")
-            client.show_status()
+            client.put_file("README.md")
+            client.list_files()
         client.close()
