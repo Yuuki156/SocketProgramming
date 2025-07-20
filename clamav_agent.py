@@ -1,6 +1,7 @@
 import socket
 import os
 import subprocess as sp
+from tqdm import tqdm
 
 host = "127.0.0.1"
 port = 15116
@@ -49,7 +50,11 @@ if __name__ == "__main__":
                     break
                 file.write(data)
                 bytes_received += len(data)
-        scan_result = scan_file(temp_filepath)
+        scan_result = ""
+        with tqdm(total = 1, desc = "Scanning with ClamAV") as progress:
+            scan_result = scan_file(temp_filepath)
+            progress.update(1)
+
         print(f"Scanning result: {scan_result}")
         client_socket.send(scan_result.encode())
     except Exception as e:

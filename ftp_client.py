@@ -4,6 +4,7 @@ import os
 import subprocess as sp
 import sys
 import time
+from tqdm import tqdm
 
 class ClientSocket:
     def __init__(self, host, port=21):
@@ -184,6 +185,16 @@ class ClientSocket:
         else:
             print("Error: Server is nor ready for changing name")
 
+    def get_file_size(self, filename):
+        try:
+            self.send_command(f"SIZE {filename}")
+            response = self.recv_response()
+            if response.startswith("213"):
+                return int(response.split(" ")[1])
+            return -1
+        except Exception:
+            return -1
+
     def scan_file_with_ClamAVAgent(self, filename):
         print(f"Scanning {filename} with ClamAVAgent")
         clamav_host = "127.0.0.1"
@@ -199,12 +210,18 @@ class ClientSocket:
             agent_socket.settimeout(45 + filesize_mb * 4)
             agent_socket.connect((clamav_host, clamav_port))
             agent_socket.send(f"{filename}<SEPARATOR>{filesize}".encode())
-            with open(filename, "rb") as file:
+            with open(filename, "rb") as file, tqdm(
+                total=filesize,
+                unit='B',
+                unit_scale=1024,
+                desc="Uploading file to ClamAV Agent"
+            ) as progress:
                 while True:
                     data = file.read(4096)
                     if not data:
                         break
                     agent_socket.sendall(data)
+                    progress.update(len(data))
             result = agent_socket.recv(4096).decode()
             agent_socket.close()
             if result == "CLEAN":
@@ -239,12 +256,18 @@ class ClientSocket:
                 if listen_socket:
                     listen_socket.close()
                 return
-            with open(local_filename, 'rb') as file:
+            with open(local_filename, 'rb') as file, tqdm(
+                total=os.path.getsize(local_filename),
+                unit='B',
+                unit_scale=1024,
+                desc="Uploading to server"
+            ) as progress:
                 while True:
                     data = file.read(4096)
                     if not data:
                         break
                     data_socket.sendall(data)
+                    progress.update(len(data))
                 data_socket.close()
                 if listen_socket:
                     listen_socket.close()
@@ -260,6 +283,7 @@ class ClientSocket:
             local_filename = server_filename
         listen_socket = None
         try:
+            filesize = self.get_file_size(server_filename)
             data_socket, listen_socket = self.get_data_socket(f"RETR {server_filename}")
             data_socket = self.context.wrap_socket(data_socket, session=self.control_socket.session)
             response = self.recv_response()
@@ -269,12 +293,18 @@ class ClientSocket:
                 if listen_socket:
                     listen_socket.close()
                 return
-            with open(local_filename, 'wb') as file:
+            with open(local_filename, 'wb') as file, tqdm(
+                total=filesize if filesize != -1 else None,
+                unit='B',
+                unit_scale=1024,
+                desc="Downloading file to local"
+            ) as progress:
                 while True:
                     data = data_socket.recv(4096)
                     if not data:
                         break
                     file.write(data)
+                    progress.update(len(data))
             data_socket.close()
             if listen_socket:
                 listen_socket.close()
