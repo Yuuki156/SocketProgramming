@@ -1,7 +1,6 @@
 import socket
 import os
 import subprocess as sp
-import time
 from tqdm import tqdm
 
 host = "127.0.0.1"
@@ -10,30 +9,11 @@ port = 15116
 
 def scan_file(filepath):
     try:
-        filesize = os.path.getsize(filepath)
-        estimated_steps = max(10, filesize // (1024 * 1024))  # Ước tính dựa trên kích thước file
-        
-        cmd = ["clamscan", "--infected", filepath]
-        process = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, text=True)
-        
-        progress_bar = tqdm(total=estimated_steps, desc="Scanning with ClamAV")
-        current_step = 0
-        
-        while process.poll() is None:
-            if current_step < estimated_steps:
-                progress_bar.update(1)
-                current_step += 1
-            time.sleep(0.1)  # Cập nhật mỗi 100ms
-        
-        remaining = estimated_steps - current_step
-        if remaining > 0:
-            progress_bar.update(remaining)
-        
-        progress_bar.close()
-        
-        if process.returncode == 0:
+        cmd = ["clamscan", "--no-summary", "--infected", filepath]
+        result = sp.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
             return "CLEAN"
-        elif process.returncode == 1:
+        elif result.returncode == 1:
             return "INFECTED"
         else:
             return "ERROR"
@@ -70,7 +50,10 @@ if __name__ == "__main__":
                     break
                 file.write(data)
                 bytes_received += len(data)
-        scan_result = scan_file(temp_filepath)
+        scan_result = ""
+        with tqdm(total = 1, desc = "Scanning with ClamAV") as progress:
+            scan_result = scan_file(temp_filepath)
+            progress.update(1)
 
         print(f"Scanning result: {scan_result}")
         client_socket.send(scan_result.encode())
