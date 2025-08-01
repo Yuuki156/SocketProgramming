@@ -534,9 +534,7 @@ class GUI(ctk.CTk):
         self.change_ldir_button.pack(side="left", padx=5, pady=5)
         self.change_sdir_button = ctk.CTkButton(self.option_frame, text="Change server directory", width=100, corner_radius=40, command=self.change_server_dir)
         self.change_sdir_button.pack(side="left", padx=5, pady=5)
-        self.show_dir_button = ctk.CTkButton(self.option_frame, text="Show server directory", width=100, corner_radius=40, command=self.show_server_dir)
-        self.show_dir_button.pack(side="left", padx=5, pady=5)
-        self.help_button = ctk.CTkButton(self.option_frame, text="Help", fg_color="pink", text_color="#969289", hover_color="#824569", width=100, corner_radius=40, command=self.show_help)
+        self.help_button = ctk.CTkButton(self.option_frame, text="Help", fg_color="pink", text_color="#969289", hover_color="#824569", width=100, corner_radius=40)
         self.help_button.pack(side="right", padx=5, pady=5)
 
         paned_window = tk.PanedWindow(self, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, bg="#2b2b2b")
@@ -626,12 +624,8 @@ class GUI(ctk.CTk):
         mode = self.switch_var.get()
         if mode == "on":
             self.mode_text.configure(text="Active")
-            if self.client or self.client.control_socket:
-                self.client.is_passive = False
         else:
             self.mode_text.configure(text="Passive")
-            if self.client or self.client.control_socket:
-                self.client.is_passive = True
 
     def log(self, message):
         self.log_queue.put(message)
@@ -754,9 +748,6 @@ class GUI(ctk.CTk):
             dialog = ctk.CTkInputDialog(text="Enter your new directory path", title="Change server directory")
             self.client.change_directory_server(dialog.get_input())
             self.refresh_remote_files()
-            
-    def show_server_dir(self):
-        self.client.print_current_server_directory()
 
     def upload_selected(self):
         selected_items = self.local_tree.selection()
@@ -829,7 +820,7 @@ class GUI(ctk.CTk):
                 thread = threading.Thread(target=self.client.delete_server_file, args=(iname,), daemon=True)
                 thread.start()
                 self.log("Remove complete")
-
+    
     def rename_selected_remote(self):
         selected_items = self.remote_tree.selection()
         for item in selected_items:
@@ -847,53 +838,6 @@ class GUI(ctk.CTk):
                 thread = threading.Thread(target=self.client.rename_server_file, args=(iname, new_name), daemon=True)
                 thread.start()
                 self.log("Rename complete")
-                
-    def show_help(self):
-        help_window = ctk.CTkToplevel(self)
-        help_window.title("Help - Secure FTP Client")
-        help_window.geometry("600x500")
-        help_window.resizable(False, False)
-        
-        help_text = """
-Secure FTP Client - Help
-
-CONNECTION:
-• Enter server IP, port, username, and password
-• Click Connect to establish connection
-• Use Passive/Active mode switch
-
-FILEs/FOLDERs OPERATIONS:
-• Right-click on files/folders for context menu
-• Upload: Send local files to server
-• Download: Get server files to local
-• Delete: Remove files/folders
-• Rename: Change file/folder names
-• Use Ctrl+click for multiple selections
-
-NAVIGATION:
-• Refresh: Update file lists
-• Change directories: Change server/local folders
-• Show status: View connection info
-
-SECURITY:
-• All uploads are scanned with ClamAV
-• Files are checked for malware before transfer
-• Progress bars show scan and transfer status
-
-***NOTE***
-• Please refresh after you download/delelte files/folders to show the correctly lists
-        """
-        
-        text_box = ctk.CTkTextbox(help_window, width=580, height=450)
-        text_box.pack(padx=10, pady=10)
-        text_box.insert("1.0", help_text.strip())
-        text_box.configure(state="disabled")
-        
-        close_button = ctk.CTkButton(help_window, text="Close", command=help_window.destroy, width=100)
-        close_button.pack(pady=(0, 10))
-        
-        help_window.focus_force()
-        help_window.grab_set()
 
 if __name__ == "__main__":
     # client = ClientSocket("127.0.0.1", 21)
