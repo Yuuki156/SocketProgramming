@@ -626,11 +626,11 @@ class GUI(ctk.CTk):
         mode = self.switch_var.get()
         if mode == "on":
             self.mode_text.configure(text="Active")
-            if self.client or self.client.control_socket:
+            if self.client and self.client.control_socket:
                 self.client.is_passive = False
         else:
             self.mode_text.configure(text="Passive")
-            if self.client or self.client.control_socket:
+            if self.client and self.client.control_socket:
                 self.client.is_passive = True
 
     def log(self, message):
@@ -756,7 +756,8 @@ class GUI(ctk.CTk):
             self.refresh_remote_files()
             
     def show_server_dir(self):
-        self.client.print_current_server_directory()
+        if self.client and self.client.control_socket:
+            self.client.print_current_server_directory()
 
     def upload_selected(self):
         selected_items = self.local_tree.selection()
