@@ -168,12 +168,12 @@ class ClientSocket:
 
     def change_directory_local(self, directory):
         try:
-            os.chdir(directory)
-            self.logger(f"Changed local directory to: {os.getcwd()}")
-        except FileNotFoundError:
-            self.logger(f"Local directory '{directory}' is not available")
+            if os.path.exists(directory) and os.path.isdir(directory):
+                self.logger(f"Local directory set to: {os.path.abspath(directory)}")
+            else:
+                self.logger(f"Local directory '{directory}' is not available")
         except Exception as e:
-            self.logger(f"Error when changing local directory: {e}")
+            self.logger(f"Error when setting local directory: {e}")
 
     def print_current_server_directory(self):
         self.send_command("PWD")
@@ -252,7 +252,9 @@ class ClientSocket:
         clamav_port = 15116
         agent_process = None
         try:
-            cmd = [sys.executable, "clamav_agent.py"]
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            clamav_agent_path = os.path.join(script_dir, "clamav_agent.py")
+            cmd = [sys.executable, clamav_agent_path]
             agent_process = sp.Popen(cmd, text=True)
             time.sleep(3)
             agent_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -348,23 +350,17 @@ class ClientSocket:
         try:
             self.make_directory(server_folder)
             self.change_directory_server(server_folder)
-            current_local_dir = os.getcwd()
-            os.chdir(local_folder)
-            for item in os.listdir("."):
-                if os.path.isfile(item):
+            for item in os.listdir(local_folder):
+                item_path = os.path.join(local_folder, item)
+                if os.path.isfile(item_path):
                     self.logger(f"Uploading file: {item}")
-                    self.put_file(item)
+                    self.put_file(item_path)
                 else:
                     self.logger(f"Uploading folder: {item}")
-                    self.put_folder(item)
+                    self.put_folder(item_path)
             self.change_directory_server("..")
         except Exception as e:
             self.logger(f"Error when putting folder: {e}")
-        finally:
-            try:
-                os.chdir(current_local_dir)
-            except:
-                pass
 
     def down_file(self, server_filename, local_filename = None):
         if not local_filename:
@@ -517,7 +513,7 @@ class GUI(ctk.CTk):
         self.connect_button = ctk.CTkButton(self.connect_frame, text="Connect", command=self.toggle_connection, fg_color= "#7FDE7C", text_color="#753096", hover_color="#3B9C3A")
         self.connect_button.grid(row=0, column=8, padx=10, pady=10)
 
-        self.switch_var = ctk.StringVar(value="off")  # on = Passive
+        self.switch_var = ctk.StringVar(value="off")
         self.mode_switch = ctk.CTkSwitch(self.connect_frame, text="Mode:", variable=self.switch_var, onvalue="on", offvalue="off", command=self.switch_mode)
         self.mode_switch.grid(row=0, column=9, padx=(10, 5), pady=10)
         self.mode_text = ctk.CTkLabel(self.connect_frame, text="Passive", text_color="cyan")
@@ -538,6 +534,8 @@ class GUI(ctk.CTk):
         self.show_dir_button.pack(side="left", padx=5, pady=5)
         self.help_button = ctk.CTkButton(self.option_frame, text="Help", fg_color="pink", text_color="#969289", hover_color="#824569", width=100, corner_radius=40, command=self.show_help)
         self.help_button.pack(side="right", padx=5, pady=5)
+        self.transferMode_button = ctk.CTkButton(self.option_frame, text = "Transfer mode: Binary", width=100, corner_radius=40, command=self.change_transferMode)
+        self.transferMode_button.pack(side = "left", padx=5, pady =5)
 
         paned_window = tk.PanedWindow(self, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, bg="#2b2b2b")
         paned_window.grid(row=2, column=0, padx=10, pady=5, sticky="nsew")
@@ -681,6 +679,10 @@ class GUI(ctk.CTk):
     def refresh_local_files(self):
         self.local_tree.delete(*self.local_tree.get_children())
         try:
+            if not os.path.exists(self.local_path):
+                self.local_path = "."
+                self.log("Local directory not found, resetting to current directory")
+            
             for file in os.listdir(self.local_path):
                 full_path = os.path.join(self.local_path, file)
                 try:
@@ -699,22 +701,23 @@ class GUI(ctk.CTk):
             threading.Thread(target=self.connect, daemon=True).start()
 
     def connect(self):
-        # host = self.host_entry.get()
-        # port = int(self.port_entry.get())
-        # username = self.username_entry.get()
-        # password = self.pass_entry.get()
-        # if not host or not port or not username or not password:
-        #     messagebox.showinfo("Notification", "Please enter full information!")
-        # else:
+        host = self.host_entry.get()
+        port = self.port_entry.get()
+        username = self.username_entry.get()
+        password = self.pass_entry.get()
         if True:
-            self.client = ClientSocket("127.0.0.1", 21, self.log, self)
+            self.client = ClientSocket(host, int(port), self.log, self)
             if self.client.connect():
-                if self.client.login("YuukiT", "151106"):
+                if self.client.login(username, password):
                     self.connect_button.configure(text = "Disconnect", fg_color="red")
                     if self.switch_var == "on":
                         self.client.is_passive = False
                     self.refresh_remote_files()
                     self.refresh_local_files()
+                    self.host_entry.configure(state = "disabled")
+                    self.pass_entry.configure(state = "disabled")
+                    self.port_entry.configure(state = "disabled")
+                    self.username_entry.configure(state = "disabled")
                 else:
                     self.client.close()
                     self.client = None
@@ -728,6 +731,10 @@ class GUI(ctk.CTk):
             self.remote_tree.delete(*self.remote_tree.get_children())
             self.local_tree.delete(*self.local_tree.get_children())
             self.connect_button.configure(text="Connect", fg_color="#7FDE7C")
+            self.host_entry.configure(state="normal")
+            self.pass_entry.configure(state="normal")
+            self.port_entry.configure(state="normal")
+            self.username_entry.configure(state="normal")
 
     def refresh(self):
         if self.client and self.client.control_socket:
@@ -741,13 +748,20 @@ class GUI(ctk.CTk):
     def change_local_dir(self):
         if self.client and self.client.control_socket:
             dialog = ctk.CTkInputDialog(text="Enter your new directory path", title="Change local directory")
-            self.local_path = dialog.get_input()
-            try:
-                self.client.change_directory_local(self.local_path)
-                self.refresh_local_files()
-            except:
-                self.local_path = "."
-                messagebox.showinfo("Notification", "Can't access your directory")
+            new_path = dialog.get_input()
+            if new_path:
+                try:
+                    if os.path.exists(new_path) and os.path.isdir(new_path):
+                        self.local_path = new_path
+                        self.client.change_directory_local(self.local_path)
+                        self.refresh_local_files()
+                        self.log(f"Successfully changed local directory to: {self.local_path}")
+                    else:
+                        messagebox.showerror("Error", f"Directory '{new_path}' does not exist or is not accessible")
+                except Exception as e:
+                    self.local_path = "."
+                    messagebox.showerror("Error", f"Can't access directory: {str(e)}")
+                    self.log(f"Failed to change local directory: {str(e)}")
 
     def change_server_dir(self):
         if self.client and self.client.control_socket:
@@ -759,16 +773,27 @@ class GUI(ctk.CTk):
         if self.client and self.client.control_socket:
             self.client.print_current_server_directory()
 
+    def change_transferMode(self):
+        if self.client and self.client.control_socket:
+            if self.transferMode_button._text == "Transfer mode: Binary":
+                self.client.set_transfer_mode('A')
+                self.transferMode_button.configure(text = "Transfer mode: ASCII")
+            else:
+                self.client.set_transfer_mode('I')
+                self.transferMode_button.configure(text = "Transfer mode: Binary")
+
+
     def upload_selected(self):
         selected_items = self.local_tree.selection()
         for item in selected_items:
             iname = self.local_tree.item(item, "text")
             itype = self.local_tree.item(item, "values")[1] 
+            full_path = os.path.join(self.local_path, iname)
             if itype == "Folder":
-                thread = threading.Thread(target=self.client.put_folder, args=(iname,), daemon=True)
+                thread = threading.Thread(target=self.client.put_folder, args=(full_path,), daemon=True)
                 thread.start()
             else:
-                thread = threading.Thread(target=self.client.put_file, args=(iname,), daemon=True)
+                thread = threading.Thread(target=self.client.put_file, args=(full_path,), daemon=True)
                 thread.start()
                 
     def delete_selected_local(self):
@@ -776,12 +801,13 @@ class GUI(ctk.CTk):
         for item in selected_items:
             iname = self.local_tree.item(item, "text")
             itype = self.local_tree.item(item, "values")[1] 
+            full_path = os.path.join(self.local_path, iname)
             if itype == "Folder":
-                thread = threading.Thread(target=self.client.remove_local_directory, args=(iname,), daemon=True)
+                thread = threading.Thread(target=self.client.remove_local_directory, args=(full_path,), daemon=True)
                 thread.start()
                 self.log("Remove complete")
             else:
-                thread = threading.Thread(target=self.client.delete_local_file, args=(iname,), daemon=True)
+                thread = threading.Thread(target=self.client.delete_local_file, args=(full_path,), daemon=True)
                 thread.start()
                 self.log("Remove complete")
         
@@ -790,16 +816,19 @@ class GUI(ctk.CTk):
         for item in selected_items:
             iname = self.local_tree.item(item, "text")
             itype = self.local_tree.item(item, "values")[1] 
+            full_path = os.path.join(self.local_path, iname)
             if itype == "Folder":
                 dialog = ctk.CTkInputDialog(text="Enter your new folder name", title="Rename local folder")
                 new_name = dialog.get_input()
-                thread = threading.Thread(target=self.client.rename_local_file, args=(iname, new_name), daemon=True)
+                new_full_path = os.path.join(self.local_path, new_name)
+                thread = threading.Thread(target=self.client.rename_local_file, args=(full_path, new_full_path), daemon=True)
                 thread.start()
                 self.log("Rename complete")
             else:
                 dialog = ctk.CTkInputDialog(text="Enter your new file name", title="Rename local file")
                 new_name = dialog.get_input()
-                thread = threading.Thread(target=self.client.rename_local_file, args=(iname, new_name), daemon=True)
+                new_full_path = os.path.join(self.local_path, new_name)
+                thread = threading.Thread(target=self.client.rename_local_file, args=(full_path, new_full_path), daemon=True)
                 thread.start()
                 self.log("Rename complete")
     
@@ -863,7 +892,7 @@ CONNECTION:
 • Click Connect to establish connection
 • Use Passive/Active mode switch
 
-FILEs/FOLDERs OPERATIONS:
+FILES/FOLDERS OPERATIONS:
 • Right-click on files/folders for context menu
 • Upload: Send local files to server
 • Download: Get server files to local
@@ -882,7 +911,7 @@ SECURITY:
 • Progress bars show scan and transfer status
 
 ***NOTE***
-• Please refresh after you download/delelte files/folders to show the correctly lists
+• Please refresh after you download/delete files/folders to show the correctly lists
         """
         
         text_box = ctk.CTkTextbox(help_window, width=580, height=450)
@@ -897,13 +926,5 @@ SECURITY:
         help_window.grab_set()
 
 if __name__ == "__main__":
-    # client = ClientSocket("127.0.0.1", 21)
-    # if client.connect():
-    #     if client.login("YuukiT", "151106"):
-    #         client.is_passive = False
-    #         client.list_files()
-    #         client.put_file("README.md")
-    #         client.list_files()
-    #     client.close()
     app = GUI()
     app.mainloop()
