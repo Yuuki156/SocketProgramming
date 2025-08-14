@@ -934,6 +934,7 @@ class GUI(ctk.CTk):
         self.grid_rowconfigure(3, weight=0)
         self.grid_columnconfigure(0, weight=1)
 
+
         self.client = None
         self.log_queue = queue.Queue()
         self.local_path = "."
@@ -951,6 +952,8 @@ class GUI(ctk.CTk):
         self.transfer_worker = threading.Thread(target=self._transfer_worker, daemon=True)
         self.transfer_worker.start()
 
+        # Suppress transient FTP data errors in logs (425/ECONNABORTED)
+        self.suppress_transient_errors = True
 
     def create(self):
         """
@@ -1166,6 +1169,13 @@ class GUI(ctk.CTk):
         try:
             while True:
                 message = self.log_queue.get_nowait()
+
+                # Skip transient data-channel errors if enabled
+                if getattr(self, "suppress_transient_errors", False):
+                    msg_upper = str(message).upper()
+                    if msg_upper.startswith("425") or "ECONNABORTED" in msg_upper or "CONNECTION ABORTED" in msg_upper:
+                        continue
+
                 self.log_box.configure(state="normal")
                 self.log_box.insert("end", message + "\n")
                 self.log_box.see("end")
