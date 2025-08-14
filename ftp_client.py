@@ -734,6 +734,14 @@ class ClientSocket:
         # Use server filename if local filename not given
         if not local_filename:
             local_filename = server_filename
+
+        # Resolve destination path into GUI's local directory (if available)
+        base_dir = self.gui.local_path if (self.gui and getattr(self.gui, "local_path", None)) else "."
+        target_path = local_filename if os.path.isabs(local_filename) else os.path.join(base_dir, local_filename)
+        target_dir = os.path.dirname(target_path)
+        if target_dir:
+            os.makedirs(target_dir, exist_ok=True)
+
         listen_socket = None
 
         try:
@@ -756,7 +764,7 @@ class ClientSocket:
                 progress = tqdm(total=filesize if filesize != -1 else None, unit='B', unit_scale=1024, desc="Downloading file to local")
 
             # Get file from server socket
-            with open(local_filename, 'wb') as file:
+            with open(target_path, 'wb') as file:
                 while True:
                     data = data_socket.recv(4096)
                     if not data:
@@ -790,27 +798,29 @@ class ClientSocket:
                                             If None, uses server folder name
         """
 
+        # Determine base local directory from GUI
+        base_dir = self.gui.local_path if (self.gui and getattr(self.gui, "local_path", None)) else "."
+
         # Use server folder if local folder not given
         if not local_folder:
             local_folder = server_folder
 
-        try:
-            # Make new directory in local directory
-            os.makedirs(local_folder, exist_ok=True)
+        # Resolve absolute target root for this folder
+        target_root = local_folder if os.path.isabs(local_folder) else os.path.join(base_dir, local_folder)
 
+        try:
+            os.makedirs(target_root, exist_ok=True)
         except Exception as e:
-            self.logger(f"Error creating directory {local_folder}: {e}")
+            self.logger(f"Error creating directory {target_root}: {e}")
             return
-        current_local_dir = os.getcwd()
 
         try:
-            # Move to the directory that need to download
+            # Move to the directory that need to download (server-side)
             self.change_directory_server(server_folder)
-            os.chdir(local_folder)
 
             list_file = self.list_files()
             if list_file:
-                # Recursive upload folder
+                # Recursive download items
                 for line in list_file.splitlines():
                     if line.strip() and len(line.split()) >= 9:
                         parts = line.split()
@@ -819,21 +829,15 @@ class ClientSocket:
                         if name in [".", ".."]:
                             continue
                         if item_type == "File":
-                            self.down_file(name)
+                            self.down_file(name, os.path.join(target_root, name))
                         else:
-                            self.down_folder(name)
+                            self.down_folder(name, os.path.join(target_root, name))
 
             # Move back to the original server directory
             self.change_directory_server("..")
 
         except Exception as e:
             self.logger(f"Error downloading folder {server_folder}: {e}")
-
-        finally:
-            try:
-                os.chdir(current_local_dir)
-            except:
-                pass
 
     def set_transfer_mode(self, mode_sign):
         """
