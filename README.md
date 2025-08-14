@@ -176,4 +176,4 @@ Contributions are welcome! Fork the repo, make changes, and submit a pull reques
 - Uses [ClamAV](https://www.clamav.net/downloads) for antivirus scanning.
 - Inspired by socket programming tutorials and secure FTP needs.
 
-For questions, contact: [nightbluerose7875@gmail.com][kinhquocne@gmail.com].
+For questions, contact: [truongtandung1511@gmail.com][kinhquocne@gmail.com].
